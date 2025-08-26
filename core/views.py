@@ -10,7 +10,8 @@ from core.models import (
     AirplaneType,
     Route,
     City,
-    Country
+    Country,
+    Airplane
 )
 from core.serializers import (
     FlightSerializer,
@@ -53,7 +54,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
 
 class AirplaneViewSet(viewsets.ModelViewSet):
-    queryset = Airport.objects.all()
+    queryset = Airplane.objects.all()
     serializer_class = AirplaneSerializer
 
 
