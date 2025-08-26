@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.validators import UniqueTogetherValidator
 
 from core.models import (
     Flight,
@@ -37,6 +38,21 @@ class TicketSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ticket
         fields = ("id", "row", "seat", "flight", "order")
+
+    def validate(self, attrs):
+        Ticket.validate_value(
+            attrs["seat"],
+            attrs["flight"].airplane.seats_in_row,
+            "seat",
+            serializers.ValidationError
+        )
+        Ticket.validate_value(
+            attrs["row"],
+            attrs["flight"].airplane.rows,
+            "row",
+            serializers.ValidationError
+        )
+        return attrs
 
 
 class OrderSerializer(serializers.ModelSerializer):

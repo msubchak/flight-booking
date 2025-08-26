@@ -80,4 +80,4 @@ class CityViewSet(viewsets.ModelViewSet):
 
 class CountryViewSet(viewsets.ModelViewSet):
     queryset = Country.objects.all()
-    serializer_Class = CountrySerializer
+    serializer_class = CountrySerializer

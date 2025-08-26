@@ -11,7 +11,7 @@ class Flight(models.Model):
     crews = models.ManyToManyField("Crew", related_name="flights")
 
     def __str__(self):
-        return f"Flight {self.id}, {self.departure_time} -> {self.arrival_time}"
+        return f"Flight {self.id}, {self.route} {self.departure_time} -> {self.arrival_time}"
 
 
 class Crew(models.Model):
@@ -36,6 +36,23 @@ class Ticket(models.Model):
     flight = models.ForeignKey(Flight, on_delete=models.CASCADE)
     order = models.ForeignKey("Order", on_delete=models.CASCADE)
 
+    class Meta:
+        unique_together = ("flight", "row", "seat",)
+
+    @staticmethod
+    def validate_value(value: int, max_value: int, field_name: str, error_to_raise):
+        if not (1 <= value <= max_value):
+            raise error_to_raise(
+                {
+                    field_name: f"{field_name} must be in range [1, {max_value}], not {value}"
+                }
+            )
+
+    def clean(self):
+        airplane = self.flight.airplane
+        Ticket.validate_value(self.seat, airplane.seats_in_row, "seat", ValueError)
+        Ticket.validate_value(self.row, airplane.rows, "row",ValueError)
+
     def __str__(self):
         return f"Ticket {self.row}{self.seat} for {self.flight}"
 
@@ -45,7 +62,7 @@ class Order(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
     def __str__(self):
-        return f"Order {self.id} by {self.user}"
+        return f"Order {self.id} by {self.user} on {self.create_at}"
 
 
 class Airplane(models.Model):
@@ -69,6 +86,14 @@ class Route(models.Model):
     source = models.ForeignKey("Airport", related_name="routes_from", on_delete=models.PROTECT)
     destination = models.ForeignKey("Airport", on_delete=models.PROTECT, related_name="routes_to")
     distance = models.IntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "destination"],
+                name="unique_route",
+            )
+        ]
 
     def __str__(self):
         return f"{self.source} -> {self.destination}. Distance {self.distance}km"
