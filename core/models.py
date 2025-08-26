@@ -66,7 +66,7 @@ class AirplaneType(models.Model):
 
 
 class Route(models.Model):
-    source = models.ManyToManyField("Airport", related_name="routes_from")
+    source = models.ForeignKey("Airport", related_name="routes_from", on_delete=models.PROTECT)
     destination = models.ForeignKey("Airport", on_delete=models.PROTECT, related_name="routes_to")
     distance = models.IntegerField()
 
