@@ -70,6 +70,9 @@ class Route(models.Model):
     destination = models.ForeignKey("Airport", on_delete=models.PROTECT, related_name="routes_to")
     distance = models.IntegerField()
 
+    def __str__(self):
+        return f"{self.source} -> {self.destination}. Distance {self.distance}km"
+
 
 class Airport(models.Model):
     name = models.CharField(max_length=255, unique=True)
