@@ -41,10 +41,7 @@ class CrewSerializer(serializers.ModelSerializer):
 
 
 class CrewListSerializer(CrewSerializer):
-    position = serializers.SlugRelatedField(
-        read_only=True,
-        slug_field="name",
-    )
+    position = serializers.CharField(source="position.name", read_only=True)
 
 
 class TicketSerializer(serializers.ModelSerializer):
@@ -68,6 +65,29 @@ class TicketSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class RouteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Route
+        fields = ("id", "source", "destination", "distance")
+
+
+class RouteListSerializer(RouteSerializer):
+    source = serializers.CharField(source="source.name")
+    destination = serializers.CharField(source="destination.name")
+    country = serializers.CharField(
+        source="source.city.country.name",
+        read_only=True,
+    )
+    city = serializers.CharField(
+        source="destination.city.name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = Route
+        fields = ("id", "source", "destination", "distance", "country", "city")
+
+
 class FlightSerializer(serializers.ModelSerializer):
     class Meta:
         model = Flight
@@ -75,11 +95,11 @@ class FlightSerializer(serializers.ModelSerializer):
 
 
 class FlightListSerializer(serializers.ModelSerializer):
-    route = serializers.SerializerMethodField()
+    route = RouteListSerializer(read_only=True)
     airplane = AirplaneListSerializer(read_only=True)
     tickets_available = serializers.IntegerField(read_only=True)
     duration = serializers.SerializerMethodField()
-    crews = serializers.SerializerMethodField()
+    crews = serializers.IntegerField(read_only=True, source="crew_count")
 
     class Meta:
         model = Flight
@@ -94,18 +114,12 @@ class FlightListSerializer(serializers.ModelSerializer):
             "tickets_available"
         )
 
-    def get_route(self, obj):
-        return f"{obj.route.source.name} -> {obj.route.destination.name}"
-
     def get_duration(self, obj):
         duration = obj.arrival_time - obj.departure_time
-        total_minutes = int(abs(duration.total_seconds()) // 60)
+        total_minutes = int(duration.total_seconds() // 60)
         hours = total_minutes // 60
         minutes = total_minutes % 60
         return f"{hours}h {minutes}m"
-
-    def get_crews(self, obj):
-        return f"{obj.crews.count()}"
 
 
 class FlightRetrieveSerializer(FlightListSerializer):
@@ -127,9 +141,7 @@ class FlightRetrieveSerializer(FlightListSerializer):
 
     def get_taken_seats(self, obj):
         seats = {}
-        for ticket in obj.tickets.all():
-            seats.setdefault(ticket.row, []).append(ticket.seat)
-        return {row: sorted(seats_list) for row, seats_list in seats.items()}
+        return {row: sorted(seats_list) for row, seats_list in sorted(seats.items())}
 
 
 class PositionSerializer(serializers.ModelSerializer):
@@ -142,35 +154,6 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ("id", "create_at", "user")
-
-
-class RouteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Route
-        fields = ("id", "source", "destination", "distance")
-
-
-class RouteListSerializer(RouteSerializer):
-    source = serializers.SlugRelatedField(
-        slug_field="name",
-        read_only=True,
-    )
-    destination = serializers.SlugRelatedField(
-        slug_field="name",
-        read_only=True,
-    )
-    country = serializers.CharField(
-        source="source.city.country.name",
-        read_only=True,
-    )
-    city = serializers.CharField(
-        source="destination.city.name",
-        read_only=True,
-    )
-
-    class Meta:
-        model = Route
-        fields = ("id", "source", "destination", "distance", "country", "city")
 
 
 class AirportSerializer(serializers.ModelSerializer):

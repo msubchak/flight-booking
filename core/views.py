@@ -36,7 +36,7 @@ from core.serializers import (
 
 class FlightViewSet(viewsets.ModelViewSet):
     queryset = Flight.objects.all()
-    serializer_class  = FlightSerializer
+    serializer_class = FlightSerializer
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -50,11 +50,30 @@ class FlightViewSet(viewsets.ModelViewSet):
         if self.action == "list":
             queryset = (
                 queryset
-                .select_related()
-                .annotate(tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets"))
+                .select_related(
+                    "airplane__airplane_type",
+                    "route__source__city__country",
+                    "route__destination__city"
+                )
+                .annotate(
+                    tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets",
+                                                                                                distinct=True),
+                    crew_count=Count("crews", distinct=True)
+                )
             )
-        elif self.action == "retrieve":
-            queryset = queryset.select_related()
+        if self.action == "retrieve":
+            queryset = (
+                queryset
+                .select_related(
+                    "airplane__airplane_type",
+                    "route__source__city__country",
+                    "route__destination__city"
+                )
+                .prefetch_related(
+                    "crews__position",
+                    "tickets__order"
+                )
+            )
         return queryset
 
 
@@ -66,6 +85,12 @@ class CrewViewSet(viewsets.ModelViewSet):
         if self.action in ["list", "retrieve"]:
             return CrewListSerializer
         return CrewSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.action in ["list", "retrieve"]:
+            queryset = queryset.select_related("position")
+        return queryset
 
 
 class PositionViewSet(viewsets.ModelViewSet):
@@ -91,6 +116,13 @@ class AirplaneViewSet(viewsets.ModelViewSet):
         if self.action in ["list", "retrieve"]:
             return AirplaneListSerializer
         return AirplaneSerializer
+
+
+    def get_queryset(self):
+        queryset = self.queryset
+        if self.action in ["list", "retrieve"]:
+            queryset = queryset.select_related("airplane_type")
+        return queryset
 
 
 class AirplaneTypeViewSet(viewsets.ModelViewSet):
