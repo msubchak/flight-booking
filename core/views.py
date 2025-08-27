@@ -1,3 +1,4 @@
+from django.db.models import Count, F
 from rest_framework import viewsets
 
 from core.models import (
@@ -29,7 +30,7 @@ from core.serializers import (
     CityListSerializer,
     AirportListSerializer,
     RouteListSerializer,
-    AirplaneListSerializer, FlightListSerializer,
+    AirplaneListSerializer, FlightListSerializer, FlightRetrieveSerializer,
 )
 
 
@@ -38,9 +39,23 @@ class FlightViewSet(viewsets.ModelViewSet):
     serializer_class  = FlightSerializer
 
     def get_serializer_class(self):
-        if self.action == 'list':
+        if self.action == "list":
             return FlightListSerializer
+        if self.action == "retrieve":
+            return FlightRetrieveSerializer
         return FlightSerializer
+
+    def get_queryset(self):
+        queryset = self.queryset
+        if self.action == "list":
+            queryset = (
+                queryset
+                .select_related()
+                .annotate(tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets"))
+            )
+        elif self.action == "retrieve":
+            queryset = queryset.select_related()
+        return queryset
 
 
 class CrewViewSet(viewsets.ModelViewSet):

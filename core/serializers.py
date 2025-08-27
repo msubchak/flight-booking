@@ -15,17 +15,23 @@ from core.models import (
 )
 
 
-class FlightSerializer(serializers.ModelSerializer):
+class AirplaneSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Flight
-        fields = ("id", "airplane", "departure_time", "arrival_time", "route")
+        model = Airplane
+        fields = ("id", "name", "rows", "seats_in_row", "airplane_type")
 
 
-class FlightListSerializer(FlightSerializer):
-    route = serializers.SerializerMethodField()
+class AirplaneListSerializer(AirplaneSerializer):
+    airplane_type = serializers.SlugRelatedField(
+        slug_field="name",
+        read_only=True
+    )
 
-    def get_route(self, obj):
-        return f"{obj.route.source.name} -> {obj.route.destination.name}"
+
+class AirplaneTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AirplaneType
+        fields = ("id", "name")
 
 
 class CrewSerializer(serializers.ModelSerializer):
@@ -39,12 +45,6 @@ class CrewListSerializer(CrewSerializer):
         read_only=True,
         slug_field="name",
     )
-
-
-class PositionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Position
-        fields = ("id", "name")
 
 
 class TicketSerializer(serializers.ModelSerializer):
@@ -68,29 +68,80 @@ class TicketSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class FlightSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Flight
+        fields = ("id", "departure_time", "arrival_time", "route", "airplane")
+
+
+class FlightListSerializer(serializers.ModelSerializer):
+    route = serializers.SerializerMethodField()
+    airplane = AirplaneListSerializer(read_only=True)
+    tickets_available = serializers.IntegerField(read_only=True)
+    duration = serializers.SerializerMethodField()
+    crews = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Flight
+        fields = (
+            "id",
+            "departure_time",
+            "arrival_time",
+            "route",
+            "duration",
+            "crews",
+            "airplane",
+            "tickets_available"
+        )
+
+    def get_route(self, obj):
+        return f"{obj.route.source.name} -> {obj.route.destination.name}"
+
+    def get_duration(self, obj):
+        duration = obj.arrival_time - obj.departure_time
+        total_minutes = int(abs(duration.total_seconds()) // 60)
+        hours = total_minutes // 60
+        minutes = total_minutes % 60
+        return f"{hours}h {minutes}m"
+
+    def get_crews(self, obj):
+        return f"{obj.crews.count()}"
+
+
+class FlightRetrieveSerializer(FlightListSerializer):
+    crews = CrewListSerializer(read_only=True, many=True)
+    taken_seats = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Flight
+        fields = (
+            "id",
+            "departure_time",
+            "arrival_time",
+            "route",
+            "duration",
+            "airplane",
+            "crews",
+            "taken_seats"
+        )
+
+    def get_taken_seats(self, obj):
+        seats = {}
+        for ticket in obj.tickets.all():
+            seats.setdefault(ticket.row, []).append(ticket.seat)
+        return {row: sorted(seats_list) for row, seats_list in seats.items()}
+
+
+class PositionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Position
+        fields = ("id", "name")
+
+
 class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ("id", "create_at", "user")
-
-
-class AirplaneSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Airplane
-        fields = ("id", "name", "rows", "seats_in_row", "airplane_type")
-
-
-class AirplaneListSerializer(AirplaneSerializer):
-    airplane_type = serializers.SlugRelatedField(
-        slug_field="name",
-        read_only=True
-    )
-
-
-class AirplaneTypeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AirplaneType
-        fields = ("id", "name")
 
 
 class RouteSerializer(serializers.ModelSerializer):
