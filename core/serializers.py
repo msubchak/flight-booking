@@ -67,18 +67,23 @@ class RouteSerializer(serializers.ModelSerializer):
 class RouteListSerializer(RouteSerializer):
     source = serializers.CharField(source="source.name")
     destination = serializers.CharField(source="destination.name")
-    country = serializers.CharField(
-        source="source.city.country.name",
-        read_only=True,
-    )
-    city = serializers.CharField(
-        source="destination.city.name",
-        read_only=True,
-    )
+    source_country = serializers.CharField(source="source.city.country.name", read_only=True)
+    source_city = serializers.CharField(source="source.city.name", read_only=True)
+    destination_country = serializers.CharField(source="destination.city.country.name", read_only=True)
+    destination_city = serializers.CharField(source="destination.city.name", read_only=True)
 
     class Meta:
         model = Route
-        fields = ("id", "source", "destination", "distance", "country", "city")
+        fields = (
+            "id",
+            "source",
+            "destination",
+            "distance",
+            "source_country",
+            "source_city",
+            "destination_country",
+            "destination_city"
+        )
 
 
 class FlightSerializer(serializers.ModelSerializer):
@@ -134,6 +139,8 @@ class FlightRetrieveSerializer(FlightListSerializer):
 
     def get_taken_seats(self, obj):
         seats = {}
+        for ticket in obj.tickets.all():
+            seats.setdefault(ticket.row, []).append(ticket.seat)
         return {row: sorted(seats_list) for row, seats_list in sorted(seats.items())}
 
 

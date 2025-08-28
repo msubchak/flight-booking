@@ -30,7 +30,9 @@ from core.serializers import (
     CityListSerializer,
     AirportListSerializer,
     RouteListSerializer,
-    AirplaneListSerializer, FlightListSerializer, FlightRetrieveSerializer,
+    AirplaneListSerializer,
+    FlightListSerializer,
+    FlightRetrieveSerializer,
 )
 
 
@@ -146,10 +148,8 @@ class RouteViewSet(viewsets.ModelViewSet):
         queryset = self.queryset
         if self.action in ["list", "retrieve"]:
             queryset = queryset.select_related(
-                "source",
-                "destination",
                 "source__city__country",
-                "destination__city"
+                "destination__city__country"
             )
         return queryset
 
