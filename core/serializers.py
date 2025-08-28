@@ -50,18 +50,11 @@ class TicketSerializer(serializers.ModelSerializer):
         fields = ("id", "row", "seat", "flight", "order")
 
     def validate(self, attrs):
-        Ticket.validate_value(
-            attrs["seat"],
-            attrs["flight"].airplane.seats_in_row,
-            "seat",
-            serializers.ValidationError
-        )
-        Ticket.validate_value(
-            attrs["row"],
-            attrs["flight"].airplane.rows,
-            "row",
-            serializers.ValidationError
-        )
+        Ticket(
+            row=attrs["row"],
+            seat=attrs["seat"],
+            flight=attrs["flight"],
+        ).check_constraints(serializers.ValidationError)
         return attrs
 
 

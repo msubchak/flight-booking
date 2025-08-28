@@ -102,6 +102,15 @@ class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.all()
     serializer_class = TicketSerializer
 
+    def get_queryset(self):
+        queryset = self.queryset
+        if self.action in ["list", "retrieve"]:
+            queryset = (
+                Ticket.objects
+                .select_related("flight__airplane", "flight__route", "order")
+                .prefetch_related("flight__crews"))
+        return queryset
+
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
@@ -116,7 +125,6 @@ class AirplaneViewSet(viewsets.ModelViewSet):
         if self.action in ["list", "retrieve"]:
             return AirplaneListSerializer
         return AirplaneSerializer
-
 
     def get_queryset(self):
         queryset = self.queryset
@@ -134,6 +142,17 @@ class RouteViewSet(viewsets.ModelViewSet):
     queryset = Route.objects.all()
     serializer_class = RouteSerializer
 
+    def get_queryset(self):
+        queryset = self.queryset
+        if self.action in ["list", "retrieve"]:
+            queryset = queryset.select_related(
+                "source",
+                "destination",
+                "source__city__country",
+                "destination__city"
+            )
+        return queryset
+
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
             return RouteListSerializer
@@ -144,6 +163,12 @@ class AirportViewSet(viewsets.ModelViewSet):
     queryset = Airport.objects.all()
     serializer_class = AirportSerializer
 
+    def get_queryset(self):
+        queryset = self.queryset
+        if self.action in ["list", "retrieve"]:
+            queryset = queryset.select_related("city__country")
+        return queryset
+
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
             return AirportListSerializer
@@ -153,6 +178,12 @@ class AirportViewSet(viewsets.ModelViewSet):
 class CityViewSet(viewsets.ModelViewSet):
     queryset = City.objects.all()
     serializer_class = CitySerializer
+
+    def get_queryset(self):
+        queryset = self.queryset
+        if self.action in ["list", "retrieve"]:
+            queryset = queryset.select_related("country")
+        return queryset
 
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:

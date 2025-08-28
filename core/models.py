@@ -48,10 +48,13 @@ class Ticket(models.Model):
                 }
             )
 
-    def clean(self):
+    def check_constraints(self, error_cls):
         airplane = self.flight.airplane
-        Ticket.validate_value(self.seat, airplane.seats_in_row, "seat", ValueError)
-        Ticket.validate_value(self.row, airplane.rows, "row",ValueError)
+        Ticket.validate_value(self.seat, airplane.seats_in_row, "seat", error_cls)
+        Ticket.validate_value(self.row, airplane.rows, "row", error_cls)
+
+    def clean(self):
+        self.check_constraints(ValueError)
 
     def __str__(self):
         return f"Ticket {self.row}{self.seat} for {self.flight}"
