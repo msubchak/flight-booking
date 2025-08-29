@@ -132,9 +132,17 @@ class OrderViewSet(
     permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
+        queryset = self.queryset
         if self.request.user.is_staff:
-            return Order.objects.all()
-        return Order.objects.filter(user=self.request.user)
+            queryset = queryset
+        else:
+            queryset = queryset.filter(user=self.request.user)
+        queryset = queryset.prefetch_related(
+            "tickets__flight__airplane",
+            "tickets__flight__route__source__city__country",
+            "tickets__flight__route__destination__city__country",
+        ).select_related("user")
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
