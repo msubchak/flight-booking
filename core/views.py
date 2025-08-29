@@ -115,10 +115,14 @@ class TicketViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = self.queryset
         if self.action in ["list", "retrieve"]:
-            queryset = (
-                Ticket.objects
-                .select_related("flight__airplane", "flight__route", "order")
-                .prefetch_related("flight__crews"))
+            queryset = queryset.select_related(
+                "flight__airplane",
+                "flight__route__source__city__country",
+                "flight__route__destination__city__country",
+                "order__user"
+            ).prefetch_related(
+                "flight__crews"
+            )
         return queryset
 
 
