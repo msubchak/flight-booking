@@ -1,5 +1,8 @@
 from django.db.models import Count, F
-from rest_framework import viewsets
+from rest_framework import viewsets, mixins
+from rest_framework.permissions import IsAuthenticated
+
+from rest_framework.viewsets import GenericViewSet
 
 from core.models import (
     Flight,
@@ -119,10 +122,14 @@ class TicketViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class OrderViewSet(viewsets.ModelViewSet):
+class OrderViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    GenericViewSet):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
-    permission_classes = (IsAdminOrIfAuthenticatedReadOnly,)
+    permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
         if self.request.user.is_staff:

@@ -45,9 +45,21 @@ class CrewListSerializer(CrewSerializer):
 
 
 class TicketSerializer(serializers.ModelSerializer):
+    source = serializers.CharField(source="flight.route.source.name", read_only=True)
+    destination = serializers.CharField(source="flight.route.destination.name", read_only=True)
+
     class Meta:
         model = Ticket
-        fields = ("id", "row", "seat", "flight", "order")
+        fields = ("id", "row", "seat", "source", "destination", "order")
+
+
+class TicketCreateSerializer(serializers.ModelSerializer):
+    source = serializers.CharField(source="flight.route.source.name", read_only=True)
+    destination = serializers.CharField(source="flight.route.destination.name", read_only=True)
+
+    class Meta:
+        model = Ticket
+        fields = ("flight", "row", "seat", "source", "destination")
 
     def validate(self, attrs):
         Ticket(
@@ -56,6 +68,22 @@ class TicketSerializer(serializers.ModelSerializer):
             flight=attrs["flight"],
         ).check_constraints(serializers.ValidationError)
         return attrs
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    tickets = TicketCreateSerializer(many=True, allow_empty=False)
+
+    class Meta:
+        model = Order
+        fields = ("id", "create_at", "tickets")
+        read_only_fields = ("user",)
+
+    def create(self, validated_data):
+        tickets_data = validated_data.pop("tickets")
+        order = Order.objects.create(**validated_data)
+        for ticket_data in tickets_data:
+            Ticket.objects.create(order=order, **ticket_data)
+        return order
 
 
 class RouteSerializer(serializers.ModelSerializer):
@@ -148,12 +176,6 @@ class PositionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Position
         fields = ("id", "name")
-
-
-class OrderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Order
-        fields = ("id", "create_at", "user")
 
 
 class AirportSerializer(serializers.ModelSerializer):
