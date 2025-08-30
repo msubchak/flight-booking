@@ -1,5 +1,6 @@
 from django.db.models import Count, F, Prefetch
 from django.utils.dateparse import parse_date
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -103,6 +104,29 @@ class FlightViewSet(viewsets.ModelViewSet):
             )
         return queryset
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "departure_city",
+                type=str,
+                description="Filter flights departing from this city (ex. ?departure_city=Warsava)",
+                required=False,
+            ),
+            OpenApiParameter(
+                "arrival_city",
+                type=str,
+                description="Filter flights arriving to this city (ex. ?arrival_city=Lviv)"
+            ),
+            OpenApiParameter(
+                "departure_date",
+                type=str,
+                description="Filter flights by departure date (ex. ?departure_date=2025-08-30)"
+            )
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
 
 class CrewViewSet(viewsets.ModelViewSet):
     queryset = Crew.objects.all()
@@ -126,6 +150,18 @@ class CrewViewSet(viewsets.ModelViewSet):
         if self.action in ["list", "retrieve"]:
             queryset = queryset.select_related("position")
         return queryset
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "position",
+                type=str,
+                description="Filter by crew position (ex. ?position=pilot)",
+            ),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
 
 class PositionViewSet(viewsets.ModelViewSet):
@@ -161,6 +197,25 @@ class TicketViewSet(viewsets.ModelViewSet):
                 "flight__crews"
             )
         return queryset
+
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "source",
+                type=str,
+                description="Filter flights departing from this city (ex. ?source=Kyiv)",
+            ),
+            OpenApiParameter(
+                "destination",
+                type=str,
+                description="Filter flights arriving to this city (ex. ?destination=Lviv)."
+            )
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
 
 
 class OrderViewSet(
