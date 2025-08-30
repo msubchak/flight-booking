@@ -93,24 +93,24 @@ class RouteSerializer(serializers.ModelSerializer):
 
 
 class RouteListSerializer(RouteSerializer):
-    source = serializers.CharField(source="source.name")
-    destination = serializers.CharField(source="destination.name")
-    source_country = serializers.CharField(source="source.city.country.name", read_only=True)
-    source_city = serializers.CharField(source="source.city.name", read_only=True)
-    destination_country = serializers.CharField(source="destination.city.country.name", read_only=True)
-    destination_city = serializers.CharField(source="destination.city.name", read_only=True)
+    departure_airport = serializers.CharField(source="source.name")
+    arrival_airport = serializers.CharField(source="destination.name")
+    departure_country = serializers.CharField(source="source.city.country.name", read_only=True)
+    departure_city = serializers.CharField(source="source.city.name", read_only=True)
+    arrival_country = serializers.CharField(source="destination.city.country.name", read_only=True)
+    arrival_city = serializers.CharField(source="destination.city.name", read_only=True)
 
     class Meta:
         model = Route
         fields = (
             "id",
-            "source",
-            "destination",
+            "departure_airport",
+            "arrival_airport",
+            "departure_country",
+            "departure_city",
+            "arrival_country",
+            "arrival_city",
             "distance",
-            "source_country",
-            "source_city",
-            "destination_country",
-            "destination_city"
         )
 
 
