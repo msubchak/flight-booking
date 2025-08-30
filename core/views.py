@@ -53,11 +53,6 @@ class FlightViewSet(viewsets.ModelViewSet):
             return FlightRetrieveSerializer
         return FlightSerializer
 
-    @staticmethod
-    def _params_to_ints(query_string):
-        return [int(str_id) for str_id in query_string.split(",")]
-
-
     def get_queryset(self):
         queryset = self.queryset
 
@@ -119,6 +114,13 @@ class CrewViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+
+        position = self.request.query_params.get("position")
+
+        if position:
+            queryset = queryset.filter(position__name__icontains=position)
+
+
         if self.action in ["list", "retrieve"]:
             queryset = queryset.select_related("position")
         return queryset
