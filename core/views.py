@@ -1,7 +1,9 @@
 from django.db.models import Count, F, Prefetch
 from django.utils.dateparse import parse_date
-from rest_framework import viewsets, mixins
+from rest_framework import viewsets, mixins, status
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from rest_framework.viewsets import GenericViewSet
 
@@ -37,7 +39,7 @@ from core.serializers import (
     RouteListSerializer,
     AirplaneListSerializer,
     FlightListSerializer,
-    FlightRetrieveSerializer,
+    FlightRetrieveSerializer, AirplaneImageSerializer,
 )
 
 
@@ -198,6 +200,8 @@ class AirplaneViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
             return AirplaneListSerializer
+        if self.action == "upload_image":
+            return AirplaneImageSerializer
         return AirplaneSerializer
 
     def get_queryset(self):
@@ -205,6 +209,20 @@ class AirplaneViewSet(viewsets.ModelViewSet):
         if self.action in ["list", "retrieve"]:
             queryset = queryset.select_related("airplane_type")
         return queryset
+
+    @action(
+        methods=["POST"],
+        detail=True,
+        permission_classes=(IsAdminOrIfAuthenticatedReadOnly,),
+        url_path="upload-image"
+    )
+    def upload_image(self, request, pk=None):
+        airplane = self.get_object()
+        serializer = self.get_serializer(airplane, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class AirplaneTypeViewSet(viewsets.ModelViewSet):

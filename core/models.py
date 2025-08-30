@@ -1,4 +1,8 @@
+import pathlib
+import uuid
+
 from django.db import models
+from django.utils.text import slugify
 
 from flight_booking import settings
 
@@ -68,11 +72,17 @@ class Order(models.Model):
         return f"Order {self.id} by {self.user} on {self.create_at}"
 
 
+def airplane_image_path(instance: "Airplane", filename: str) -> pathlib.Path:
+    filename = f"{slugify(instance.name)}--{uuid.uuid4()}" + pathlib.Path(filename).suffix
+    return pathlib.Path("upload/airplane/") / pathlib.Path(filename)
+
+
 class Airplane(models.Model):
     name = models.CharField(max_length=255, unique=True)
     rows = models.IntegerField()
     seats_in_row = models.IntegerField()
     airplane_type = models.ForeignKey("AirplaneType", on_delete=models.PROTECT)
+    image = models.ImageField(null=True, upload_to=airplane_image_path)
 
     def __str__(self):
         return self.name

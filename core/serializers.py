@@ -18,7 +18,7 @@ from core.models import (
 class AirplaneSerializer(serializers.ModelSerializer):
     class Meta:
         model = Airplane
-        fields = ("id", "name", "rows", "seats_in_row", "airplane_type")
+        fields = ("id", "name", "rows", "seats_in_row", "airplane_type", "image")
 
 
 class AirplaneListSerializer(AirplaneSerializer):
@@ -26,6 +26,12 @@ class AirplaneListSerializer(AirplaneSerializer):
         slug_field="name",
         read_only=True
     )
+
+
+class AirplaneImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Airplane
+        fields = ("id", "image")
 
 
 class AirplaneTypeSerializer(serializers.ModelSerializer):
