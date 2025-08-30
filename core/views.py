@@ -1,4 +1,5 @@
-from django.db.models import Count, F
+from django.db.models import Count, F, Prefetch
+from django.utils.dateparse import parse_date
 from rest_framework import viewsets, mixins
 from rest_framework.permissions import IsAuthenticated
 
@@ -52,8 +53,30 @@ class FlightViewSet(viewsets.ModelViewSet):
             return FlightRetrieveSerializer
         return FlightSerializer
 
+    @staticmethod
+    def _params_to_ints(query_string):
+        return [int(str_id) for str_id in query_string.split(",")]
+
+
     def get_queryset(self):
         queryset = self.queryset
+
+        departure_city = self.request.query_params.get("departure_city")
+        arrival_city =  self.request.query_params.get("arrival_city")
+        departure_date = self.request.query_params.get("departure_date")
+
+        if departure_city:
+            queryset = queryset.filter(route__source__city__name__icontains=departure_city)
+
+        if arrival_city:
+            queryset = queryset.filter(route__destination__city__name__icontains=arrival_city)
+
+        if departure_date:
+            date_obj = parse_date(departure_date)
+            if date_obj:
+                queryset = queryset.filter(departure_time__date=date_obj)
+
+
         if self.action == "list":
             queryset = (
                 queryset
@@ -141,10 +164,13 @@ class OrderViewSet(
             queryset = queryset
         else:
             queryset = queryset.filter(user=self.request.user)
+        Ticket_queryset = Ticket.objects.select_related(
+            "flight__airplane",
+            "flight__route__source__city__country",
+            "flight__route__destination__city__country",
+        )
         queryset = queryset.prefetch_related(
-            "tickets__flight__airplane",
-            "tickets__flight__route__source__city__country",
-            "tickets__flight__route__destination__city__country",
+            Prefetch("tickets", queryset=Ticket_queryset),
         ).select_related("user")
         return queryset
 
