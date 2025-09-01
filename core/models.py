@@ -82,7 +82,7 @@ class Airplane(models.Model):
     rows = models.IntegerField()
     seats_in_row = models.IntegerField()
     airplane_type = models.ForeignKey("AirplaneType", on_delete=models.PROTECT)
-    image = models.ImageField(null=True, upload_to=airplane_image_path)
+    image = models.ImageField(null=True, upload_to=airplane_image_path )
 
     def __str__(self):
         return self.name

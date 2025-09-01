@@ -1,30 +1,45 @@
+import uuid
 from datetime import datetime
 
 from django.contrib.auth import get_user_model
+from django.db.models import F, Count
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.reverse import reverse
 from rest_framework.test import APIClient
 
 from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position
+from core.serializers import FlightListSerializer
 
 
-def sample_route(distance=500, **params) -> Route:
+def sample_route(
+        distance=500,
+        source_city_name="Kyiv",
+        dest_city_name="Warsaw",
+        **params
+) -> Route:
     source_country, _ = Country.objects.get_or_create(name="Ukraine")
-    source_city, _ = City.objects.get_or_create(name="Kyiv", country=source_country)
-    source_airport, _ = Airport.objects.get_or_create(name="Boryspil", city=source_city)
+    source_city, _ = City.objects.get_or_create(name=source_city_name, country=source_country)
+    source_airport, _ = Airport.objects.get_or_create(name=f"{source_city_name} Airport", city=source_city)
 
     dest_country, _ = Country.objects.get_or_create(name="Poland")
-    dest_city, _ = City.objects.get_or_create(name="Warsaw", country=dest_country)
-    dest_airport, _ = Airport.objects.get_or_create(name="Chopin", city=dest_city)
+    dest_city, _ = City.objects.get_or_create(name=dest_city_name, country=dest_country)
+    dest_airport, _ = Airport.objects.get_or_create(name=f"{dest_city_name} Airport", city=dest_city)
 
     defaults = {
         "source": source_airport,
         "destination": dest_airport,
         "distance": distance
     }
+
     defaults.update(params)
-    return Route.objects.create(**defaults)
+
+    route, _ = Route.objects.get_or_create(
+        source=defaults["source"],
+        destination=defaults["destination"],
+        defaults={"distance": defaults["distance"]}
+    )
+    return route
 
 
 def sample_crews(**params) -> Crew:
@@ -39,15 +54,19 @@ def sample_crews(**params) -> Crew:
     return Crew.objects.create(**defaults)
 
 
-def sample_flight(**params) -> Flight:
+def sample_flight(route_params=None, **params) -> Flight:
     airplane_type, _ = AirplaneType.objects.get_or_create(name="Boeing 737")
     airplane = Airplane.objects.create(
-        name="Boeing",
+        name=f"Boeing-{uuid.uuid4()}",
         rows=20,
         seats_in_row=6,
         airplane_type=airplane_type,
     )
-    route = sample_route()
+
+    if route_params is None:
+        route_params = {}
+
+    route = sample_route(**route_params)
     crew = sample_crews()
 
     defaults = {
@@ -62,7 +81,11 @@ def sample_flight(**params) -> Flight:
     return flight
 
 
-FLIGHT_URL = reverse("core:flight-list")
+FLIGHT_LIST_URL = reverse("core:flight-list")
+
+
+def flight_detail_url(flight_id):
+    return reverse("core:flight-detail", args=[flight_id])
 
 
 class UnauthenticatedFlightApiTests(TestCase):
@@ -70,7 +93,7 @@ class UnauthenticatedFlightApiTests(TestCase):
         self.client = APIClient()
 
     def test_auth_required(self):
-        res = self.client.get(FLIGHT_URL)
+        res = self.client.get(FLIGHT_LIST_URL)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
@@ -86,5 +109,99 @@ class AuthenticatedFlightApiTests(TestCase):
     def test_flight_list(self):
         sample_flight()
 
-        res = self.client.get(FLIGHT_URL)
+        res = self.client.get(FLIGHT_LIST_URL)
+        flights = Flight.objects.annotate(
+            tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
+            crew_count=Count("crews", distinct=True),
+        )
+        serializer = FlightListSerializer(flights, many=True)
+
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_filter_flights_by_departure_city(self):
+        flight_1 = sample_flight(route_params={"source_city_name": "Kyiv", "dest_city_name": "London"})
+        flight_2 = sample_flight(route_params={"source_city_name": "Lviv", "dest_city_name": "Berlin"})
+        res = self.client.get(
+            FLIGHT_LIST_URL,
+            data={
+                "departure_city": "Kyiv"
+            }
+        )
+        serializer_kyiv = FlightListSerializer(Flight.objects.filter(id=flight_1.id).annotate(
+            tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
+            crew_count=Count("crews", distinct=True)
+        ),
+            many=True
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer_kyiv.data)
+
+    def test_filter_flights_by_arrival_city(self):
+        flight_1 = sample_flight(route_params={"source_city_name": "London", "dest_city_name": "Kyiv"})
+        flight_2 = sample_flight(route_params={"source_city_name": "Lviv", "dest_city_name": "Berlin"})
+        res = self.client.get(
+            FLIGHT_LIST_URL,
+            data={
+                "arrival_city": "Kyiv"
+            }
+        )
+        serializer_kyiv = FlightListSerializer(Flight.objects.filter(id=flight_1.id).annotate(
+            tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
+            crew_count=Count("crews", distinct=True)
+        ),
+            many=True
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer_kyiv.data)
+
+    def test_filter_flights_by_departure_time(self):
+            flight_1 = sample_flight(departure_time=datetime(2020, 12, 1, 7, 0))
+            flight_2 = sample_flight(departure_time=datetime(2023, 5, 1, 7, 0))
+            flight_3 = sample_flight(departure_time=datetime(2025, 3, 1, 7, 0))
+
+            res = self.client.get(
+                FLIGHT_LIST_URL,
+                data={
+                    "departure_time": flight_1.departure_time.isoformat()
+                }
+            )
+            serializer = FlightListSerializer(Flight.objects.filter(route__source__city__name__icontains="Kyiv").annotate(
+            tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
+            crew_count=Count("crews", distinct=True)
+        ),
+            many=True
+        )
+
+            self.assertEqual(res.status_code, status.HTTP_200_OK)
+            self.assertEqual(res.data["results"], serializer.data)
+
+    def test_filter_flights_by_arrival_time(self):
+        flight_1 = sample_flight(arrival_time=datetime(2020, 12, 1, 7, 0))
+        flight_2 = sample_flight(arrival_time=datetime(2023, 5, 1, 7, 0))
+        flight_3 = sample_flight(arrival_time=datetime(2025, 3, 1, 7, 0))
+
+        res = self.client.get(
+            FLIGHT_LIST_URL,
+            data={
+                "departure_time": flight_1.arrival_time.isoformat()
+            }
+        )
+        serializer = FlightListSerializer(Flight.objects.filter(route__source__city__name__icontains="Kyiv").annotate(
+            tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
+            crew_count=Count("crews", distinct=True)
+        ),
+            many=True
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_create_flight_forbidden(self):
+        flight = sample_flight()
+        payload = FlightListSerializer(flight).data
+        res = self.client.post(FLIGHT_LIST_URL, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
