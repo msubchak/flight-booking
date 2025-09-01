@@ -9,7 +9,8 @@ from rest_framework.reverse import reverse
 from rest_framework.test import APIClient
 
 from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position
-from core.serializers import FlightListSerializer, FlightRetrieveSerializer, CrewListSerializer, CrewSerializer
+from core.serializers import FlightListSerializer, FlightRetrieveSerializer, CrewListSerializer, CrewSerializer, \
+    PositionSerializer
 
 
 def sample_route(
@@ -83,6 +84,7 @@ def sample_flight(route_params=None, **params) -> Flight:
 
 FLIGHT_LIST_URL = reverse("core:flight-list")
 CREW_LIST_URL = reverse("core:crew-list")
+POSITION_LIST_URL = reverse("core:position-list")
 
 
 def flight_detail_url(flight_id):
@@ -240,17 +242,12 @@ class AuthenticatedFlightApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
 
-class AuthenticatedCrewApiTests(TestCase):
+class UnauthenticatedCrewApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
 
-    def test_crew_list_auth_required(self):
+    def test_crew_auth_required(self):
         res = self.client.get(CREW_LIST_URL)
-        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
-
-    def test_crew_retrieve_auth_required(self):
-        crews = sample_crews()
-        res = self.client.get(flight_detail_url(crews.id))
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
@@ -263,7 +260,7 @@ class AuthenticatedCrewApiTests(TestCase):
         )
         self.client.force_authenticate(self.user)
 
-    def test_crew_list(self):
+    def test_crew(self):
         crew_1 = sample_crews()
         crew_2 = sample_crews()
         crews = [crew_1, crew_2]
@@ -274,7 +271,7 @@ class AuthenticatedCrewApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["results"], serializer.data)
 
-    def test_filter_crew_list_by_position(self):
+    def test_filter_crew_by_position(self):
         crew_1 = sample_crews()
         crew_2 = sample_crews()
         res = self.client.get(
@@ -289,9 +286,46 @@ class AuthenticatedCrewApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["results"], serializer.data)
 
-    def test_create_crew_list_forbidden(self):
+    def test_create_crew_forbidden(self):
         crew = sample_crews()
         payload = CrewListSerializer(crew).data
         res = self.client.post(CREW_LIST_URL, payload)
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class UnauthenticatedPositionApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_position_auth_required(self):
+        res = self.client.get(POSITION_LIST_URL)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AuthenticatedPositionApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            email="test@test.com",
+            password="12345",
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_position(self):
+        position_1 = Position.objects.create(name="test1")
+        position_2 = Position.objects.create(name="test2")
+        positions = [position_1, position_2]
+        res = self.client.get(POSITION_LIST_URL)
+        serializer = PositionSerializer(positions, many=True)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_create_position_forbidden(self):
+        position = Position.objects.create(name="test")
+        payload = PositionSerializer(position).data
+        res = self.client.post(POSITION_LIST_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
