@@ -10,7 +10,7 @@ from rest_framework.test import APIClient
 
 from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position, Ticket, Order
 from core.serializers import FlightListSerializer, FlightRetrieveSerializer, CrewListSerializer, CrewSerializer, \
-    PositionSerializer, TicketSerializer
+    PositionSerializer, TicketSerializer, OrderSerializer
 
 
 def sample_route(
@@ -86,6 +86,7 @@ FLIGHT_LIST_URL = reverse("core:flight-list")
 CREW_LIST_URL = reverse("core:crew-list")
 POSITION_LIST_URL = reverse("core:position-list")
 TICKET_LIST_URL = reverse("core:ticket-list")
+ORDER_LIST_URL = reverse("core:order-list")
 
 
 def flight_detail_url(flight_id):
@@ -443,3 +444,61 @@ class AuthenticatedTicketApiTests(TestCase):
         res = self.client.post(TICKET_LIST_URL, payload)
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class UnauthenticatedOrderApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_order_auth_required(self):
+        res = self.client.get(ORDER_LIST_URL)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AuthenticatedOrderApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            email="test@test.com",
+            password="12345",
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_order(self):
+        order_1= Order.objects.create(user=self.user)
+        order_2 = Order.objects.create(user=self.user)
+        orders = [order_1, order_2]
+
+        res = self.client.get(ORDER_LIST_URL)
+        serializer = OrderSerializer(orders, many=True)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_order_create(self):
+        flight = sample_flight()
+        payload = {
+            "tickets": [{
+                "flight": flight.id,
+                "seat": 1,
+                "row": 1,
+            }]
+        }
+
+        res = self.client.post(ORDER_LIST_URL, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+    def test_order_validate_value(self):
+        flight = sample_flight()
+        payload = {
+            "tickets": [{
+                "flight": flight.id,
+                "seat": 10000,
+                "row": 1,
+            }]
+        }
+
+        res = self.client.post(ORDER_LIST_URL, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
