@@ -61,6 +61,7 @@ class FlightViewSet(viewsets.ModelViewSet):
         departure_city = self.request.query_params.get("departure_city")
         arrival_city =  self.request.query_params.get("arrival_city")
         departure_date = self.request.query_params.get("departure_date")
+        arrival_date = self.request.query_params.get("arrival_date")
 
         if departure_city:
             queryset = queryset.filter(route__source__city__name__icontains=departure_city)
@@ -72,6 +73,11 @@ class FlightViewSet(viewsets.ModelViewSet):
             date_obj = parse_date(departure_date)
             if date_obj:
                 queryset = queryset.filter(departure_time__date=date_obj)
+
+        if arrival_date:
+            date_obj = parse_date(arrival_date)
+            if date_obj:
+                queryset = queryset.filter(arrival_time__date=date_obj)
 
 
         if self.action == "list":
@@ -120,6 +126,11 @@ class FlightViewSet(viewsets.ModelViewSet):
                 "departure_date",
                 type=str,
                 description="Filter flights by departure date (ex. ?departure_date=2025-08-30)"
+            ),
+            OpenApiParameter(
+                "arrival_date",
+                type=str,
+                description="Filter flights by arrival date (ex. ?arrival_date=2025-09-07)"
             )
         ]
     )
