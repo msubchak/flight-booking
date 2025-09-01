@@ -8,9 +8,9 @@ from rest_framework import status
 from rest_framework.reverse import reverse
 from rest_framework.test import APIClient
 
-from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position
+from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position, Ticket, Order
 from core.serializers import FlightListSerializer, FlightRetrieveSerializer, CrewListSerializer, CrewSerializer, \
-    PositionSerializer
+    PositionSerializer, TicketSerializer
 
 
 def sample_route(
@@ -85,6 +85,7 @@ def sample_flight(route_params=None, **params) -> Flight:
 FLIGHT_LIST_URL = reverse("core:flight-list")
 CREW_LIST_URL = reverse("core:crew-list")
 POSITION_LIST_URL = reverse("core:position-list")
+TICKET_LIST_URL = reverse("core:ticket-list")
 
 
 def flight_detail_url(flight_id):
@@ -166,25 +167,26 @@ class AuthenticatedFlightApiTests(TestCase):
         self.assertEqual(res.data["results"], serializer_kyiv.data)
 
     def test_filter_flights_list_by_departure_time(self):
-            flight_1 = sample_flight(departure_time=datetime(2020, 12, 1, 7, 0))
-            flight_2 = sample_flight(departure_time=datetime(2023, 5, 1, 7, 0))
-            flight_3 = sample_flight(departure_time=datetime(2025, 3, 1, 7, 0))
+        flight_1 = sample_flight(departure_time=datetime(2020, 12, 1, 7, 0))
+        flight_2 = sample_flight(departure_time=datetime(2023, 5, 1, 7, 0))
+        flight_3 = sample_flight(departure_time=datetime(2025, 3, 1, 7, 0))
 
-            res = self.client.get(
-                FLIGHT_LIST_URL,
-                data={
-                    "departure_date": flight_1.departure_time.date().isoformat()
-                }
-            )
-            serializer = FlightListSerializer(Flight.objects.filter(departure_time__date=flight_1.departure_time.date()).annotate(
-            tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
-            crew_count=Count("crews", distinct=True)
-        ),
+        res = self.client.get(
+            FLIGHT_LIST_URL,
+            data={
+                "departure_date": flight_1.departure_time.date().isoformat()
+            }
+        )
+        serializer = FlightListSerializer(
+            Flight.objects.filter(departure_time__date=flight_1.departure_time.date()).annotate(
+                tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
+                crew_count=Count("crews", distinct=True)
+            ),
             many=True
         )
 
-            self.assertEqual(res.status_code, status.HTTP_200_OK)
-            self.assertEqual(res.data["results"], serializer.data)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
 
     def test_filter_flights_list_by_arrival_time(self):
         flight_1 = sample_flight(arrival_time=datetime(2020, 12, 1, 7, 0))
@@ -197,16 +199,16 @@ class AuthenticatedFlightApiTests(TestCase):
                 "arrival_date": flight_1.arrival_time.date().isoformat()
             }
         )
-        serializer = FlightListSerializer(Flight.objects.filter(arrival_time__date=flight_1.arrival_time.date()).annotate(
-            tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
-            crew_count=Count("crews", distinct=True)
-        ),
+        serializer = FlightListSerializer(
+            Flight.objects.filter(arrival_time__date=flight_1.arrival_time.date()).annotate(
+                tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
+                crew_count=Count("crews", distinct=True)
+            ),
             many=True
         )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["results"], serializer.data)
-
 
     def test_create_flight_list_forbidden(self):
         flight = sample_flight()
@@ -329,3 +331,115 @@ class AuthenticatedPositionApiTests(TestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+
+class UnauthenticatedTicketApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_ticket_auth_required(self):
+        res = self.client.get(POSITION_LIST_URL)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AuthenticatedTicketApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            email="test@test.com",
+            password="12345",
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_ticket(self):
+        order = Order.objects.create(user=self.user)
+        ticket_1 = Ticket.objects.create(
+            row = 1,
+            seat = 1,
+            flight = sample_flight(),
+            order=order
+        )
+        ticket_2 = Ticket.objects.create(
+            row = 2,
+            seat = 2,
+            flight = sample_flight(),
+            order=order,
+        )
+        tickets = [ticket_1, ticket_2]
+        res = self.client.get(TICKET_LIST_URL)
+        serializer = TicketSerializer(tickets, many=True)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_filter_ticket_by_source(self):
+        order = Order.objects.create(user=self.user)
+        flight_1 = sample_flight(route_params={"source_city_name": "Kyiv", "dest_city_name": "London"})
+        flight_2 = sample_flight(route_params={"source_city_name": "Lviv", "dest_city_name": "Berlin"})
+
+        ticket_1 = Ticket.objects.create(
+            row = 1,
+            seat = 1,
+            flight = flight_1,
+            order = order
+        )
+        Ticket.objects.create(
+            row = 2,
+            seat = 2,
+            flight = flight_2,
+            order = order
+        )
+
+        res = self.client.get(
+            TICKET_LIST_URL,
+            data={
+                "source": "Kyiv"
+            }
+        )
+        serializer = TicketSerializer([ticket_1], many=True)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_filter_ticket_by_destination(self):
+        order = Order.objects.create(user=self.user)
+        flight_1 = sample_flight(route_params={"source_city_name": "Kyiv", "dest_city_name": "London"})
+        flight_2 = sample_flight(route_params={"source_city_name": "Lviv", "dest_city_name": "Berlin"})
+
+        ticket_1 = Ticket.objects.create(
+            row=1,
+            seat=1,
+            flight=flight_1,
+            order=order
+        )
+        Ticket.objects.create(
+            row=2,
+            seat=2,
+            flight=flight_2,
+            order=order
+        )
+
+        res = self.client.get(
+            TICKET_LIST_URL,
+            data={
+                "destination": "London"
+            }
+        )
+        serializer = TicketSerializer([ticket_1], many=True)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_create_ticket_forbidden(self):
+        order = Order.objects.create(user=self.user)
+        flight_1 = sample_flight()
+        ticket = Ticket.objects.create(
+            row = 1,
+            seat = 1,
+            flight = flight_1,
+            order=order
+        )
+
+        payload = TicketSerializer(ticket).data
+        res = self.client.post(TICKET_LIST_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
