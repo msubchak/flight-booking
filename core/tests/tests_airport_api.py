@@ -9,7 +9,7 @@ from rest_framework.reverse import reverse
 from rest_framework.test import APIClient
 
 from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position
-from core.serializers import FlightListSerializer
+from core.serializers import FlightListSerializer, FlightRetrieveSerializer
 
 
 def sample_route(
@@ -92,8 +92,13 @@ class UnauthenticatedFlightApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
 
-    def test_auth_required(self):
+    def test_flight_list_auth_required(self):
         res = self.client.get(FLIGHT_LIST_URL)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_flight_retrieve_auth_required(self):
+        flight = sample_flight()
+        res = self.client.get(flight_detail_url(flight.id))
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
@@ -119,7 +124,7 @@ class AuthenticatedFlightApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["results"], serializer.data)
 
-    def test_filter_flights_by_departure_city(self):
+    def test_filter_flights_list_by_departure_city(self):
         flight_1 = sample_flight(route_params={"source_city_name": "Kyiv", "dest_city_name": "London"})
         flight_2 = sample_flight(route_params={"source_city_name": "Lviv", "dest_city_name": "Berlin"})
         res = self.client.get(
@@ -138,7 +143,7 @@ class AuthenticatedFlightApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["results"], serializer_kyiv.data)
 
-    def test_filter_flights_by_arrival_city(self):
+    def test_filter_flights_list_by_arrival_city(self):
         flight_1 = sample_flight(route_params={"source_city_name": "London", "dest_city_name": "Kyiv"})
         flight_2 = sample_flight(route_params={"source_city_name": "Lviv", "dest_city_name": "Berlin"})
         res = self.client.get(
@@ -157,7 +162,7 @@ class AuthenticatedFlightApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["results"], serializer_kyiv.data)
 
-    def test_filter_flights_by_departure_time(self):
+    def test_filter_flights_list_by_departure_time(self):
             flight_1 = sample_flight(departure_time=datetime(2020, 12, 1, 7, 0))
             flight_2 = sample_flight(departure_time=datetime(2023, 5, 1, 7, 0))
             flight_3 = sample_flight(departure_time=datetime(2025, 3, 1, 7, 0))
@@ -165,10 +170,10 @@ class AuthenticatedFlightApiTests(TestCase):
             res = self.client.get(
                 FLIGHT_LIST_URL,
                 data={
-                    "departure_time": flight_1.departure_time.isoformat()
+                    "departure_date": flight_1.departure_time.date().isoformat()
                 }
             )
-            serializer = FlightListSerializer(Flight.objects.filter(route__source__city__name__icontains="Kyiv").annotate(
+            serializer = FlightListSerializer(Flight.objects.filter(departure_time__date=flight_1.departure_time.date()).annotate(
             tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
             crew_count=Count("crews", distinct=True)
         ),
@@ -178,7 +183,7 @@ class AuthenticatedFlightApiTests(TestCase):
             self.assertEqual(res.status_code, status.HTTP_200_OK)
             self.assertEqual(res.data["results"], serializer.data)
 
-    def test_filter_flights_by_arrival_time(self):
+    def test_filter_flights_list_by_arrival_time(self):
         flight_1 = sample_flight(arrival_time=datetime(2020, 12, 1, 7, 0))
         flight_2 = sample_flight(arrival_time=datetime(2023, 5, 1, 7, 0))
         flight_3 = sample_flight(arrival_time=datetime(2025, 3, 1, 7, 0))
@@ -186,10 +191,10 @@ class AuthenticatedFlightApiTests(TestCase):
         res = self.client.get(
             FLIGHT_LIST_URL,
             data={
-                "departure_time": flight_1.arrival_time.isoformat()
+                "arrival_date": flight_1.arrival_time.date().isoformat()
             }
         )
-        serializer = FlightListSerializer(Flight.objects.filter(route__source__city__name__icontains="Kyiv").annotate(
+        serializer = FlightListSerializer(Flight.objects.filter(arrival_time__date=flight_1.arrival_time.date()).annotate(
             tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
             crew_count=Count("crews", distinct=True)
         ),
@@ -199,9 +204,36 @@ class AuthenticatedFlightApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["results"], serializer.data)
 
-    def test_create_flight_forbidden(self):
+
+    def test_create_flight_list_forbidden(self):
         flight = sample_flight()
         payload = FlightListSerializer(flight).data
         res = self.client.post(FLIGHT_LIST_URL, payload, format="json")
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_flight_retrieve(self):
+        flight = sample_flight()
+
+        res = self.client.get(flight_detail_url(flight.id))
+        flights = Flight.objects.annotate(
+            tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets", distinct=True),
+            crew_count=Count("crews", distinct=True),
+        )
+        flight_obj = Flight.objects.get(id=flight.id)
+        serializer = FlightRetrieveSerializer(flight_obj)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data, serializer.data)
+
+    def test_create_flight_retrieve_forbidden(self):
+        flight = sample_flight()
+        payload = FlightRetrieveSerializer(flight).data
+        res = self.client.post(flight_detail_url(flight.id), payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_flight_retrieve_not_found(self):
+        fake_id = 999
+        res = self.client.get(flight_detail_url(fake_id))
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
