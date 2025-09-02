@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position, Ticket, Order
 from core.serializers import FlightListSerializer, FlightRetrieveSerializer, CrewListSerializer, CrewSerializer, \
     PositionSerializer, TicketSerializer, OrderSerializer, AirplaneListSerializer, AirplaneTypeSerializer, \
-    RouteListSerializer
+    RouteListSerializer, AirportSerializer, AirportListSerializer
 
 
 def sample_airplane_type(**params) -> AirplaneType:
@@ -104,6 +104,17 @@ def sample_airplane(**params) -> Airplane:
     return Airplane.objects.create(**defaults)
 
 
+def sample_airport(**params) -> Airport:
+    country, _ = Country.objects.get_or_create(name="Ukraine")
+    city, _ = City.objects.get_or_create(name="Warsaw", country=country)
+    defaults = {
+        "name": f"Airport-{uuid.uuid4()}",
+        "city": city,
+    }
+    defaults.update(params)
+    return Airport.objects.create(**defaults)
+
+
 def get_temporary_image():
     image = Image.new('RGB', (100, 100), color='red')
     temp_file = tempfile.NamedTemporaryFile(suffix='.jpg')
@@ -120,6 +131,7 @@ ORDER_LIST_URL = reverse("core:order-list")
 AIRPLANE_LIST_URL = reverse("core:airplane-list")
 AIRPLANE_TYPE_LIST_URL = reverse("core:airplanetype-list")
 ROUTE_LIST_URL = reverse("core:route-list")
+AIRPORT_LIST_URL = reverse("core:airport-list")
 
 
 def flight_detail_url(flight_id):
@@ -140,6 +152,10 @@ def airplane_type_detail_url(airplane_type_id):
 
 def route_detail_url(route_id):
     return reverse("core:route-detail", args=[route_id])
+
+
+def airport_detail_url(airport_id):
+    return reverse("core:airport-detail", args=[airport_id])
 
 
 class UnauthenticatedFlightApiTests(TestCase):
@@ -751,6 +767,61 @@ class AuthenticatedRouteApiTests(TestCase):
 
         res = self.client.get(route_detail_url(route.id))
         serializer = RouteListSerializer(route)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data, serializer.data)
+
+
+class UnauthenticatedAirportApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_airport_list_auth_required(self):
+        res = self.client.get(AIRPORT_LIST_URL)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_airport_retrieve_auth_required(self):
+        airport = sample_airport()
+        res = self.client.get(airport_detail_url(airport.id))
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AuthenticatedAirportApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            email="test@test.com",
+            password="12345",
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_airport_list(self):
+        airport_1 = sample_airport()
+        airport_2 = sample_airport()
+        airports = [airport_1, airport_2]
+
+        res = self.client.get(AIRPORT_LIST_URL)
+        serializer = AirportListSerializer(airports, many=True)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_create_airport_forbidden(self):
+        country = Country.objects.create(name="test")
+        city = City.objects.create(name="Warsaw", country=country)
+        payload = {
+            "name": "airport",
+            "city": city,
+        }
+        res = self.client.post(AIRPORT_LIST_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_airport_retrieve(self):
+        airport = sample_airport()
+
+        res = self.client.get(airport_detail_url(airport.id))
+        serializer = AirportListSerializer(airport)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data, serializer.data)
