@@ -9,12 +9,14 @@ from django.db.models import F, Count
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.reverse import reverse
+from rest_framework.templatetags.rest_framework import data
 from rest_framework.test import APIClient
 
 from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position, Ticket, Order
 from core.serializers import FlightListSerializer, FlightRetrieveSerializer, CrewListSerializer, CrewSerializer, \
     PositionSerializer, TicketSerializer, OrderSerializer, AirplaneListSerializer, AirplaneTypeSerializer, \
     RouteListSerializer, AirportSerializer, AirportListSerializer, CityListSerializer, CountrySerializer
+from users.serializers import UserSerializer
 
 
 def sample_airplane_type(**params) -> AirplaneType:
@@ -95,10 +97,10 @@ def sample_flight(route_params=None, **params) -> Flight:
 def sample_airplane(**params) -> Airplane:
     airplane_type = sample_airplane_type()
     defaults = {
-        "name":f"Boeing-{uuid.uuid4()}",
-        "rows":20,
-        "seats_in_row":6,
-        "airplane_type":airplane_type,
+        "name": f"Boeing-{uuid.uuid4()}",
+        "rows": 20,
+        "seats_in_row": 6,
+        "airplane_type": airplane_type,
     }
     defaults.update(params)
     return Airplane.objects.create(**defaults)
@@ -447,15 +449,15 @@ class AuthenticatedTicketApiTests(TestCase):
     def test_ticket(self):
         order = Order.objects.create(user=self.user)
         ticket_1 = Ticket.objects.create(
-            row = 1,
-            seat = 1,
-            flight = sample_flight(),
+            row=1,
+            seat=1,
+            flight=sample_flight(),
             order=order
         )
         ticket_2 = Ticket.objects.create(
-            row = 2,
-            seat = 2,
-            flight = sample_flight(),
+            row=2,
+            seat=2,
+            flight=sample_flight(),
             order=order,
         )
         tickets = [ticket_1, ticket_2]
@@ -471,16 +473,16 @@ class AuthenticatedTicketApiTests(TestCase):
         flight_2 = sample_flight(route_params={"source_city_name": "Lviv", "dest_city_name": "Berlin"})
 
         ticket_1 = Ticket.objects.create(
-            row = 1,
-            seat = 1,
-            flight = flight_1,
-            order = order
+            row=1,
+            seat=1,
+            flight=flight_1,
+            order=order
         )
         Ticket.objects.create(
-            row = 2,
-            seat = 2,
-            flight = flight_2,
-            order = order
+            row=2,
+            seat=2,
+            flight=flight_2,
+            order=order
         )
 
         res = self.client.get(
@@ -527,9 +529,9 @@ class AuthenticatedTicketApiTests(TestCase):
         order = Order.objects.create(user=self.user)
         flight_1 = sample_flight()
         ticket = Ticket.objects.create(
-            row = 1,
-            seat = 1,
-            flight = flight_1,
+            row=1,
+            seat=1,
+            flight=flight_1,
             order=order
         )
 
@@ -558,7 +560,7 @@ class AuthenticatedOrderApiTests(TestCase):
         self.client.force_authenticate(self.user)
 
     def test_order(self):
-        order_1= Order.objects.create(user=self.user)
+        order_1 = Order.objects.create(user=self.user)
         order_2 = Order.objects.create(user=self.user)
         orders = [order_1, order_2]
 
@@ -615,7 +617,6 @@ class UnauthenticatedAirplaneApiTests(TestCase):
         )
         res = self.client.post(airplane_upload_url(airplane.id))
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
-
 
 
 class AuthenticatedAirplaneApiTests(TestCase):
@@ -959,3 +960,41 @@ class AuthenticatedCountryApiTests(TestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data, serializer.data)
+
+
+class UserSerializersTests(TestCase):
+    def test_user_serializer_create(self):
+        data = {
+            "email": "test@email.com",
+            "password": "password12345"
+        }
+        serializer = UserSerializer(data=data)
+
+        self.assertTrue(serializer.is_valid())
+        user = serializer.save()
+
+        self.assertNotEqual(user.password, data["password"])
+        self.assertTrue(user.check_password(data["password"]))
+
+    def test_user_serializer_update_password(self):
+        user = get_user_model().objects.create_user(
+            email= "test_email.com",
+            password = "password12345"
+        )
+        serializer = UserSerializer(
+            user, data={"password": "newpass"}, partial=True
+        )
+
+        self.assertTrue(serializer.is_valid())
+        update_user = serializer.save()
+
+        self.assertTrue(update_user.check_password("newpass"))
+
+    def test_create_superuser_success(self):
+        user = get_user_model().objects.create_superuser(
+            email="test@email.com",
+            password="password12345"
+        )
+
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.is_staff)
