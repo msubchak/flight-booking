@@ -1,7 +1,10 @@
+import tempfile
 import uuid
 from datetime import datetime
 
+from PIL import Image
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import F, Count
 from django.test import TestCase
 from rest_framework import status
@@ -10,7 +13,7 @@ from rest_framework.test import APIClient
 
 from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position, Ticket, Order
 from core.serializers import FlightListSerializer, FlightRetrieveSerializer, CrewListSerializer, CrewSerializer, \
-    PositionSerializer, TicketSerializer, OrderSerializer
+    PositionSerializer, TicketSerializer, OrderSerializer, AirplaneListSerializer
 
 
 def sample_route(
@@ -82,15 +85,43 @@ def sample_flight(route_params=None, **params) -> Flight:
     return flight
 
 
+def sample_airplane(**params) -> Airplane:
+    airplane_type, _ = AirplaneType.objects.get_or_create(name="Boeing 737")
+    defaults = {
+        "name":f"Boeing-{uuid.uuid4()}",
+        "rows":20,
+        "seats_in_row":6,
+        "airplane_type":airplane_type,
+    }
+    defaults.update(params)
+    return Airplane.objects.create(**defaults)
+
+
+def get_temporary_image():
+    image = Image.new('RGB', (100, 100), color='red')
+    temp_file = tempfile.NamedTemporaryFile(suffix='.jpg')
+    image.save(temp_file, format='JPEG')
+    temp_file.seek(0)
+    return temp_file
+
+
+
 FLIGHT_LIST_URL = reverse("core:flight-list")
 CREW_LIST_URL = reverse("core:crew-list")
 POSITION_LIST_URL = reverse("core:position-list")
 TICKET_LIST_URL = reverse("core:ticket-list")
 ORDER_LIST_URL = reverse("core:order-list")
+AIRPLANE_LIST_URL = reverse("core:airplane-list")
 
 
 def flight_detail_url(flight_id):
     return reverse("core:flight-detail", args=[flight_id])
+
+def airplane_upload_url(airplane_id):
+    return reverse("core:airplane-upload-image", args=[airplane_id])
+
+def airplane_detail_url(airplane_id):
+    return reverse("core:airplane-detail", args=[airplane_id])
 
 
 class UnauthenticatedFlightApiTests(TestCase):
@@ -502,3 +533,100 @@ class AuthenticatedOrderApiTests(TestCase):
         res = self.client.post(ORDER_LIST_URL, payload, format="json")
 
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class UnauthenticatedAirplaneApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_airplane_auth_required(self):
+        res = self.client.get(AIRPLANE_LIST_URL)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_airplane_upload_image_unauthorized(self):
+        airplane_type = AirplaneType.objects.create(name="Airplane")
+        airplane = Airplane.objects.create(
+            name="Airplane1",
+            rows=1,
+            seats_in_row=1,
+            airplane_type=airplane_type
+        )
+        res = self.client.post(airplane_upload_url(airplane.id))
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+
+class AuthenticatedAirplaneApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            email="test@test.com",
+            password="12345",
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_airplane_list(self):
+        airplane_1 = sample_airplane()
+        airplane_2 = sample_airplane()
+        airplanes = [airplane_1, airplane_2]
+
+        res = self.client.get(AIRPLANE_LIST_URL)
+        serializer = AirplaneListSerializer(airplanes, many=True)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_create_airplane_forbidden(self):
+        airplane_type, _ = AirplaneType.objects.get_or_create(name="Boeing 737")
+        payload = {
+            "name": "Test plane",
+            "rows": 10,
+            "seats_in_row": 6,
+            "airplane_type": airplane_type.id,
+        }
+        res = self.client.post(AIRPLANE_LIST_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_airplane_retrieve(self):
+        airplane = sample_airplane()
+
+        res = self.client.get(airplane_detail_url(airplane.id))
+        serializer = AirplaneListSerializer(airplane)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data, serializer.data)
+
+    def test_airplane_user_upload_image(self):
+        airplane = sample_airplane()
+
+        image = SimpleUploadedFile(
+            name='test_image.jpg',
+            content=b'someimagecontent',
+            content_type='image/jpeg'
+        )
+
+        res = self.client.post(
+            airplane_upload_url(airplane.id),
+            {"image": image},
+            format="multipart"
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_airplane_staff_upload_image(self):
+        airplane = sample_airplane()
+        self.user.is_staff = True
+        self.user.save()
+
+        image = get_temporary_image()
+
+        res = self.client.post(
+            airplane_upload_url(airplane.id),
+            {"image": image},
+            format="multipart"
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        airplane.refresh_from_db()
+        self.assertTrue(bool(airplane.image))
