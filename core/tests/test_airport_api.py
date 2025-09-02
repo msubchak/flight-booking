@@ -13,7 +13,8 @@ from rest_framework.test import APIClient
 
 from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position, Ticket, Order
 from core.serializers import FlightListSerializer, FlightRetrieveSerializer, CrewListSerializer, CrewSerializer, \
-    PositionSerializer, TicketSerializer, OrderSerializer, AirplaneListSerializer, AirplaneTypeSerializer
+    PositionSerializer, TicketSerializer, OrderSerializer, AirplaneListSerializer, AirplaneTypeSerializer, \
+    RouteListSerializer
 
 
 def sample_airplane_type(**params) -> AirplaneType:
@@ -118,6 +119,7 @@ TICKET_LIST_URL = reverse("core:ticket-list")
 ORDER_LIST_URL = reverse("core:order-list")
 AIRPLANE_LIST_URL = reverse("core:airplane-list")
 AIRPLANE_TYPE_LIST_URL = reverse("core:airplanetype-list")
+ROUTE_LIST_URL = reverse("core:route-list")
 
 
 def flight_detail_url(flight_id):
@@ -134,6 +136,10 @@ def airplane_detail_url(airplane_id):
 
 def airplane_type_detail_url(airplane_type_id):
     return reverse("core:airplanetype-detail", args=[airplane_type_id])
+
+
+def route_detail_url(route_id):
+    return reverse("core:route-detail", args=[route_id])
 
 
 class UnauthenticatedFlightApiTests(TestCase):
@@ -686,6 +692,65 @@ class AuthenticatedAirplaneTypeApiTests(TestCase):
 
         res = self.client.get(airplane_type_detail_url(airplane.id))
         serializer = AirplaneTypeSerializer(airplane)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data, serializer.data)
+
+
+class UnauthenticatedRouterApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_route_list_auth_required(self):
+        res = self.client.get(ROUTE_LIST_URL)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_route_retrieve_auth_required(self):
+        route = sample_route()
+        res = self.client.get(route_detail_url(route.id))
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AuthenticatedRouteApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            email="test@test.com",
+            password="12345",
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_route_list(self):
+        route_1 = sample_route(source_city_name="Kyiv", dest_city_name="Warsaw")
+        route_2 = sample_route(source_city_name="Lviv", dest_city_name="Berlin")
+        routes = [route_1, route_2]
+
+        res = self.client.get(ROUTE_LIST_URL)
+        serializer = RouteListSerializer(routes, many=True)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_create_route_forbidden(self):
+        country = Country.objects.create(name="test")
+        city = City.objects.create(name="Warsaw", country=country)
+        airport = Airport.objects.create(name="testairport", city=city)
+        source = airport
+        destination = airport
+        payload = {
+            "source": source,
+            "destination": destination,
+            "distance": 500
+        }
+        res = self.client.post(ROUTE_LIST_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_route_retrieve(self):
+        route = sample_route()
+
+        res = self.client.get(route_detail_url(route.id))
+        serializer = RouteListSerializer(route)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data, serializer.data)
