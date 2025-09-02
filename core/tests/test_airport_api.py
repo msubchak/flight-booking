@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position, Ticket, Order
 from core.serializers import FlightListSerializer, FlightRetrieveSerializer, CrewListSerializer, CrewSerializer, \
     PositionSerializer, TicketSerializer, OrderSerializer, AirplaneListSerializer, AirplaneTypeSerializer, \
-    RouteListSerializer, AirportSerializer, AirportListSerializer, CityListSerializer
+    RouteListSerializer, AirportSerializer, AirportListSerializer, CityListSerializer, CountrySerializer
 
 
 def sample_airplane_type(**params) -> AirplaneType:
@@ -125,6 +125,14 @@ def sample_city(**params) -> City:
     return City.objects.create(**defaults)
 
 
+def sample_country(**params) -> Country:
+    defaults = {
+        "name": f"Country-{uuid.uuid4()}",
+    }
+    defaults.update(params)
+    return Country.objects.create(**defaults)
+
+
 def get_temporary_image():
     image = Image.new('RGB', (100, 100), color='red')
     temp_file = tempfile.NamedTemporaryFile(suffix='.jpg')
@@ -142,7 +150,8 @@ AIRPLANE_LIST_URL = reverse("core:airplane-list")
 AIRPLANE_TYPE_LIST_URL = reverse("core:airplanetype-list")
 ROUTE_LIST_URL = reverse("core:route-list")
 AIRPORT_LIST_URL = reverse("core:airport-list")
-CITY_LUST_URL = reverse("core:city-list")
+CITY_LIST_URL = reverse("core:city-list")
+COUNTRY_LIST_URL = reverse("core:country-list")
 
 
 def flight_detail_url(flight_id):
@@ -171,6 +180,10 @@ def airport_detail_url(airport_id):
 
 def city_detail_url(city_id):
     return reverse("core:city-detail", args=[city_id])
+
+
+def country_detail_url(country_id):
+    return reverse("core:country-detail", args=[country_id])
 
 
 class UnauthenticatedFlightApiTests(TestCase):
@@ -847,7 +860,7 @@ class UnauthenticatedCityApiTests(TestCase):
         self.client = APIClient()
 
     def test_city_list_auth_required(self):
-        res = self.client.get(CITY_LUST_URL)
+        res = self.client.get(CITY_LIST_URL)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_city_retrieve_auth_required(self):
@@ -870,7 +883,7 @@ class AuthenticatedCityApiTests(TestCase):
         city_2 = sample_city()
         cities = [city_1, city_2]
 
-        res = self.client.get(CITY_LUST_URL)
+        res = self.client.get(CITY_LIST_URL)
         serializer = CityListSerializer(cities, many=True)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -882,7 +895,7 @@ class AuthenticatedCityApiTests(TestCase):
             "name": "city",
             "country": country,
         }
-        res = self.client.post(CITY_LUST_URL, payload)
+        res = self.client.post(CITY_LIST_URL, payload)
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -891,6 +904,58 @@ class AuthenticatedCityApiTests(TestCase):
 
         res = self.client.get(city_detail_url(city.id))
         serializer = CityListSerializer(city)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data, serializer.data)
+
+
+class UnauthenticatedCountryApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_country_list_auth_required(self):
+        res = self.client.get(COUNTRY_LIST_URL)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_country_retrieve_auth_required(self):
+        country = sample_country()
+        res = self.client.get(country_detail_url(country.id))
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AuthenticatedCountryApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            email="test@test.com",
+            password="12345",
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_country_list(self):
+        country_1 = sample_country()
+        country_2 = sample_country()
+        countries = [country_1, country_2]
+
+        res = self.client.get(COUNTRY_LIST_URL)
+        serializer = CountrySerializer(countries, many=True)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_create_country_forbidden(self):
+        payload = {
+            "name": "country",
+        }
+        res = self.client.post(COUNTRY_LIST_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_country_retrieve(self):
+        country = sample_country()
+
+        res = self.client.get(country_detail_url(country.id))
+        serializer = CountrySerializer(country)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data, serializer.data)
