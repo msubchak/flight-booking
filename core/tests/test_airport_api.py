@@ -13,7 +13,13 @@ from rest_framework.test import APIClient
 
 from core.models import AirplaneType, Airplane, Country, City, Airport, Route, Flight, Crew, Position, Ticket, Order
 from core.serializers import FlightListSerializer, FlightRetrieveSerializer, CrewListSerializer, CrewSerializer, \
-    PositionSerializer, TicketSerializer, OrderSerializer, AirplaneListSerializer
+    PositionSerializer, TicketSerializer, OrderSerializer, AirplaneListSerializer, AirplaneTypeSerializer
+
+
+def sample_airplane_type(**params) -> AirplaneType:
+    name = params.get("name", f"Boeing-{uuid.uuid4()}")
+    airplane_type, _ = AirplaneType.objects.get_or_create(name=name)
+    return airplane_type
 
 
 def sample_route(
@@ -59,7 +65,7 @@ def sample_crews(**params) -> Crew:
 
 
 def sample_flight(route_params=None, **params) -> Flight:
-    airplane_type, _ = AirplaneType.objects.get_or_create(name="Boeing 737")
+    airplane_type = sample_airplane_type()
     airplane = Airplane.objects.create(
         name=f"Boeing-{uuid.uuid4()}",
         rows=20,
@@ -86,7 +92,7 @@ def sample_flight(route_params=None, **params) -> Flight:
 
 
 def sample_airplane(**params) -> Airplane:
-    airplane_type, _ = AirplaneType.objects.get_or_create(name="Boeing 737")
+    airplane_type = sample_airplane_type()
     defaults = {
         "name":f"Boeing-{uuid.uuid4()}",
         "rows":20,
@@ -105,23 +111,29 @@ def get_temporary_image():
     return temp_file
 
 
-
 FLIGHT_LIST_URL = reverse("core:flight-list")
 CREW_LIST_URL = reverse("core:crew-list")
 POSITION_LIST_URL = reverse("core:position-list")
 TICKET_LIST_URL = reverse("core:ticket-list")
 ORDER_LIST_URL = reverse("core:order-list")
 AIRPLANE_LIST_URL = reverse("core:airplane-list")
+AIRPLANE_TYPE_LIST_URL = reverse("core:airplanetype-list")
 
 
 def flight_detail_url(flight_id):
     return reverse("core:flight-detail", args=[flight_id])
 
+
 def airplane_upload_url(airplane_id):
     return reverse("core:airplane-upload-image", args=[airplane_id])
 
+
 def airplane_detail_url(airplane_id):
     return reverse("core:airplane-detail", args=[airplane_id])
+
+
+def airplane_type_detail_url(airplane_type_id):
+    return reverse("core:airplanetype-detail", args=[airplane_type_id])
 
 
 class UnauthenticatedFlightApiTests(TestCase):
@@ -630,3 +642,50 @@ class AuthenticatedAirplaneApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         airplane.refresh_from_db()
         self.assertTrue(bool(airplane.image))
+
+
+class UnauthenticatedAirplaneTypeApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_airplane_type_auth_required(self):
+        res = self.client.get(AIRPLANE_TYPE_LIST_URL)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AuthenticatedAirplaneTypeApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            email="test@test.com",
+            password="12345",
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_airplane_type_list(self):
+        airplane_type_1 = sample_airplane_type()
+        airplane_type_2 = sample_airplane_type()
+        airplanes_types = [airplane_type_1, airplane_type_2]
+
+        res = self.client.get(AIRPLANE_TYPE_LIST_URL)
+        serializer = AirplaneTypeSerializer(airplanes_types, many=True)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"], serializer.data)
+
+    def test_create_airplane_type_forbidden(self):
+        payload = {
+            "name": "Test type"
+        }
+        res = self.client.post(AIRPLANE_TYPE_LIST_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_airplane_type_retrieve(self):
+        airplane = sample_airplane_type()
+
+        res = self.client.get(airplane_type_detail_url(airplane.id))
+        serializer = AirplaneTypeSerializer(airplane)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data, serializer.data)
