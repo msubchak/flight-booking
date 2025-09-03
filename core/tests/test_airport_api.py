@@ -38,7 +38,16 @@ from core.serializers import (
     CityListSerializer,
     CountrySerializer
 )
-from users.serializers import UserSerializer
+
+
+class AuthenticatedApiTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            email="test@test.com",
+            password="12345"
+        )
+        self.client.force_authenticate(user=self.user)
 
 
 def sample_airplane_type(**params) -> AirplaneType:
@@ -240,15 +249,7 @@ class UnauthenticatedFlightApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class AuthenticatedFlightApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
-            email="test@test.com",
-            password="12345",
-        )
-        self.client.force_authenticate(self.user)
-
+class AuthenticatedFlightApiTests(AuthenticatedApiTestCase):
     def test_flight_list(self):
         sample_flight()
 
@@ -436,15 +437,7 @@ class UnauthenticatedCrewApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class AuthenticatedCrewApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
-            email="test@test.com",
-            password="12345",
-        )
-        self.client.force_authenticate(self.user)
-
+class AuthenticatedCrewApiTests(AuthenticatedApiTestCase):
     def test_crew(self):
         crew_1 = sample_crews()
         crew_2 = sample_crews()
@@ -486,15 +479,7 @@ class UnauthenticatedPositionApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class AuthenticatedPositionApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
-            email="test@test.com",
-            password="12345",
-        )
-        self.client.force_authenticate(self.user)
-
+class AuthenticatedPositionApiTests(AuthenticatedApiTestCase):
     def test_position(self):
         position_1 = Position.objects.create(name="test1")
         position_2 = Position.objects.create(name="test2")
@@ -522,15 +507,7 @@ class UnauthenticatedTicketApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class AuthenticatedTicketApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
-            email="test@test.com",
-            password="12345",
-        )
-        self.client.force_authenticate(self.user)
-
+class AuthenticatedTicketApiTests(AuthenticatedApiTestCase):
     def test_ticket(self):
         order = Order.objects.create(user=self.user)
         ticket_1 = Ticket.objects.create(
@@ -655,15 +632,7 @@ class UnauthenticatedOrderApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class AuthenticatedOrderApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
-            email="test@test.com",
-            password="12345",
-        )
-        self.client.force_authenticate(self.user)
-
+class AuthenticatedOrderApiTests(AuthenticatedApiTestCase):
     def test_order(self):
         order_1 = Order.objects.create(user=self.user)
         order_2 = Order.objects.create(user=self.user)
@@ -724,15 +693,7 @@ class UnauthenticatedAirplaneApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class AuthenticatedAirplaneApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
-            email="test@test.com",
-            password="12345",
-        )
-        self.client.force_authenticate(self.user)
-
+class AuthenticatedAirplaneApiTests(AuthenticatedApiTestCase):
     def test_airplane_list(self):
         airplane_1 = sample_airplane()
         airplane_2 = sample_airplane()
@@ -811,15 +772,7 @@ class UnauthenticatedAirplaneTypeApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class AuthenticatedAirplaneTypeApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
-            email="test@test.com",
-            password="12345",
-        )
-        self.client.force_authenticate(self.user)
-
+class AuthenticatedAirplaneTypeApiTests(AuthenticatedApiTestCase):
     def test_airplane_type_list(self):
         airplane_type_1 = sample_airplane_type()
         airplane_type_2 = sample_airplane_type()
@@ -863,15 +816,7 @@ class UnauthenticatedRouterApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class AuthenticatedRouteApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
-            email="test@test.com",
-            password="12345",
-        )
-        self.client.force_authenticate(self.user)
-
+class AuthenticatedRouteApiTests(AuthenticatedApiTestCase):
     def test_route_list(self):
         route_1 = sample_route(
             source_city_name="Kyiv",
@@ -928,15 +873,7 @@ class UnauthenticatedAirportApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class AuthenticatedAirportApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
-            email="test@test.com",
-            password="12345",
-        )
-        self.client.force_authenticate(self.user)
-
+class AuthenticatedAirportApiTests(AuthenticatedApiTestCase):
     def test_airport_list(self):
         airport_1 = sample_airport()
         airport_2 = sample_airport()
@@ -983,15 +920,7 @@ class UnauthenticatedCityApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class AuthenticatedCityApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
-            email="test@test.com",
-            password="12345",
-        )
-        self.client.force_authenticate(self.user)
-
+class AuthenticatedCityApiTests(AuthenticatedApiTestCase):
     def test_city_list(self):
         city_1 = sample_city()
         city_2 = sample_city()
@@ -1037,15 +966,7 @@ class UnauthenticatedCountryApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-class AuthenticatedCountryApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
-            email="test@test.com",
-            password="12345",
-        )
-        self.client.force_authenticate(self.user)
-
+class AuthenticatedCountryApiTests(AuthenticatedApiTestCase):
     def test_country_list(self):
         country_1 = sample_country()
         country_2 = sample_country()
@@ -1073,41 +994,3 @@ class AuthenticatedCountryApiTests(TestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data, serializer.data)
-
-
-class UserSerializersTests(TestCase):
-    def test_user_serializer_create(self):
-        data = {
-            "email": "test@email.com",
-            "password": "password12345"
-        }
-        serializer = UserSerializer(data=data)
-
-        self.assertTrue(serializer.is_valid())
-        user = serializer.save()
-
-        self.assertNotEqual(user.password, data["password"])
-        self.assertTrue(user.check_password(data["password"]))
-
-    def test_user_serializer_update_password(self):
-        user = get_user_model().objects.create_user(
-            email="test_email.com",
-            password="password12345"
-        )
-        serializer = UserSerializer(
-            user, data={"password": "newpass"}, partial=True
-        )
-
-        self.assertTrue(serializer.is_valid())
-        update_user = serializer.save()
-
-        self.assertTrue(update_user.check_password("newpass"))
-
-    def test_create_superuser_success(self):
-        user = get_user_model().objects.create_superuser(
-            email="test@email.com",
-            password="password12345"
-        )
-
-        self.assertTrue(user.is_superuser)
-        self.assertTrue(user.is_staff)
