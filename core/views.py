@@ -22,7 +22,6 @@ from core.models import (
     Country,
     Airplane
 )
-from core.permissions import IsAdminOrIfAuthenticatedReadOnly
 from core.serializers import (
     FlightSerializer,
     CrewSerializer,
@@ -41,7 +40,8 @@ from core.serializers import (
     RouteListSerializer,
     AirplaneListSerializer,
     FlightListSerializer,
-    FlightRetrieveSerializer, AirplaneImageSerializer,
+    FlightRetrieveSerializer,
+    AirplaneImageSerializer,
 )
 
 
@@ -60,15 +60,19 @@ class FlightViewSet(viewsets.ModelViewSet):
         queryset = self.queryset
 
         departure_city = self.request.query_params.get("departure_city")
-        arrival_city =  self.request.query_params.get("arrival_city")
+        arrival_city = self.request.query_params.get("arrival_city")
         departure_date = self.request.query_params.get("departure_date")
         arrival_date = self.request.query_params.get("arrival_date")
 
         if departure_city:
-            queryset = queryset.filter(route__source__city__name__icontains=departure_city)
+            queryset = (queryset.filter
+                        (route__source__city__name__icontains=departure_city)
+                        )
 
         if arrival_city:
-            queryset = queryset.filter(route__destination__city__name__icontains=arrival_city)
+            queryset = queryset.filter(
+                route__destination__city__name__icontains=arrival_city
+            )
 
         if departure_date:
             date_obj = parse_date(departure_date)
@@ -80,19 +84,20 @@ class FlightViewSet(viewsets.ModelViewSet):
             if date_obj:
                 queryset = queryset.filter(arrival_time__date=date_obj)
 
-
         if self.action == "list":
             queryset = (
                 queryset
                 .select_related(
                     "airplane__airplane_type",
                     "route__source__city__country",
-                    "route__destination__city"
+                    "route__destination__city",
                 )
                 .annotate(
-                    tickets_available=F("airplane__seats_in_row") * F("airplane__rows") - Count("tickets",
-                                                                                                distinct=True),
-                    crew_count=Count("crews", distinct=True)
+                    tickets_available=(
+                            F("airplane__seats_in_row") * F("airplane__rows")
+                            - Count("tickets", distinct=True)
+                    ),
+                    crew_count=Count("crews", distinct=True),
                 )
             )
         if self.action == "retrieve":
@@ -115,24 +120,36 @@ class FlightViewSet(viewsets.ModelViewSet):
             OpenApiParameter(
                 "departure_city",
                 type=str,
-                description="Filter flights departing from this city (ex. ?departure_city=Warsava)",
+                description=(
+                        "Filter flights departing from this city"
+                        " (ex. ?departure_city=Warszawa)"
+                ),
                 required=False,
             ),
             OpenApiParameter(
                 "arrival_city",
                 type=str,
-                description="Filter flights arriving to this city (ex. ?arrival_city=Lviv)"
+                description=(
+                        "Filter flights arriving to this city"
+                        " (ex. ?arrival_city=Lviv)"
+                ),
             ),
             OpenApiParameter(
                 "departure_date",
                 type=str,
-                description="Filter flights by departure date (ex. ?departure_date=2025-08-30)"
+                description=(
+                        "Filter flights by departure date"
+                        " (ex. ?departure_date=2025-08-30)"
+                ),
             ),
             OpenApiParameter(
                 "arrival_date",
                 type=str,
-                description="Filter flights by arrival date (ex. ?arrival_date=2025-09-07)"
-            )
+                description=(
+                        "Filter flights by arrival date"
+                        " (ex. ?arrival_date=2025-09-07)"
+                ),
+            ),
         ]
     )
     def list(self, request, *args, **kwargs):
@@ -155,7 +172,6 @@ class CrewViewSet(viewsets.ModelViewSet):
 
         if position:
             queryset = queryset.filter(position__name__icontains=position)
-
 
         if self.action in ["list", "retrieve"]:
             queryset = queryset.select_related("position")
@@ -190,10 +206,14 @@ class TicketViewSet(viewsets.ModelViewSet):
         destination = self.request.query_params.get("destination")
 
         if source:
-            queryset = queryset.filter(flight__route__source__name__icontains=source)
+            queryset = (queryset.filter
+                        (flight__route__source__name__icontains=source)
+                        )
 
         if destination:
-            queryset = queryset.filter(flight__route__destination__name__icontains=destination)
+            queryset = queryset.filter(
+                flight__route__destination__name__icontains=destination
+            )
 
         if self.action in ["list", "retrieve"]:
             queryset = queryset.select_related(
@@ -206,18 +226,23 @@ class TicketViewSet(viewsets.ModelViewSet):
             )
         return queryset
 
-
     @extend_schema(
         parameters=[
             OpenApiParameter(
                 "source",
                 type=str,
-                description="Filter flights departing from this city (ex. ?source=Kyiv)",
+                description=(
+                        "Filter flights departing from this city"
+                        " (ex. ?source=Kyiv)"
+                ),
             ),
             OpenApiParameter(
                 "destination",
                 type=str,
-                description="Filter flights arriving to this city (ex. ?destination=Lviv)."
+                description=(
+                        "Filter flights arriving to this city"
+                        " (ex. ?destination=Lviv)"
+                )
             )
         ]
     )
@@ -225,12 +250,12 @@ class TicketViewSet(viewsets.ModelViewSet):
         return super().list(request, *args, **kwargs)
 
 
-
 class OrderViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,
-    GenericViewSet):
+    GenericViewSet
+):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = (IsAuthenticated,)
@@ -241,13 +266,13 @@ class OrderViewSet(
             queryset = queryset
         else:
             queryset = queryset.filter(user=self.request.user)
-        Ticket_queryset = Ticket.objects.select_related(
+        ticket_queryset = Ticket.objects.select_related(
             "flight__airplane",
             "flight__route__source__city__country",
             "flight__route__destination__city__country",
         )
         queryset = queryset.prefetch_related(
-            Prefetch("tickets", queryset=Ticket_queryset),
+            Prefetch("tickets", queryset=ticket_queryset),
         ).select_related("user")
         return queryset
 
