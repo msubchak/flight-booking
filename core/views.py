@@ -42,6 +42,7 @@ from core.serializers import (
     FlightListSerializer,
     FlightRetrieveSerializer,
     AirplaneImageSerializer,
+    FlightCreateUpdateSerializer,
 )
 
 
@@ -54,7 +55,7 @@ class FlightViewSet(viewsets.ModelViewSet):
             return FlightListSerializer
         if self.action == "retrieve":
             return FlightRetrieveSerializer
-        return FlightSerializer
+        return FlightCreateUpdateSerializer
 
     def get_queryset(self):
         queryset = self.queryset
@@ -90,7 +91,10 @@ class FlightViewSet(viewsets.ModelViewSet):
                 .select_related(
                     "airplane__airplane_type",
                     "route__source__city__country",
-                    "route__destination__city",
+                    "route__destination__city__country",
+                )
+                .prefetch_related(
+                    "crews__position",
                 )
                 .annotate(
                     tickets_available=(
@@ -106,11 +110,11 @@ class FlightViewSet(viewsets.ModelViewSet):
                 .select_related(
                     "airplane__airplane_type",
                     "route__source__city__country",
-                    "route__destination__city"
+                    "route__destination__city__country"
                 )
                 .prefetch_related(
                     "crews__position",
-                    "tickets__order"
+                    "tickets__order__user"
                 )
             )
         return queryset
@@ -218,11 +222,12 @@ class TicketViewSet(viewsets.ModelViewSet):
         if self.action in ["list", "retrieve"]:
             queryset = queryset.select_related(
                 "flight__airplane",
-                "flight__route__source__city__country",
+                "flight__airplane__airplane_type",
                 "flight__route__destination__city__country",
+                "flight__route__source__city__country",
                 "order__user"
             ).prefetch_related(
-                "flight__crews"
+                "flight__crews__position"
             )
         return queryset
 
