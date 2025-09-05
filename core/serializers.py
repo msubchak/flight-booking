@@ -185,6 +185,25 @@ class FlightListSerializer(serializers.ModelSerializer):
         return f"{hours}h {minutes}m"
 
 
+class FlightCreateUpdateSerializer(serializers.ModelSerializer):
+    crews = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Crew.objects.all(),
+        required=False
+    )
+
+    class Meta:
+        model = Flight
+        fields = (
+            "id",
+            "departure_time",
+            "arrival_time",
+            "route",
+            "airplane",
+            "crews"
+        )
+
+
 class FlightRetrieveSerializer(FlightListSerializer):
     crews = CrewListSerializer(read_only=True, many=True)
     taken_seats = serializers.SerializerMethodField()
