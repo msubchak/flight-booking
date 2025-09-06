@@ -96,7 +96,7 @@ class TicketCreateSerializer(serializers.ModelSerializer):
 
 
 class OrderSerializer(serializers.ModelSerializer):
-    tickets = TicketCreateSerializer(many=True, allow_empty=False)
+    tickets = TicketCreateSerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
@@ -105,17 +105,17 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class OrderCreateSerializer(serializers.ModelSerializer):
-    tickets = TicketCreateSerializer()
+    tickets = TicketCreateSerializer(write_only=True)
+    order_tickets = TicketSerializer(source='tickets', read_only=True, many=True)
 
     class Meta:
         model = Order
-        fields = ("id", "tickets")
+        fields = ("id", "tickets", "order_tickets")
 
     def create(self, validated_data):
-        tickets_data = validated_data.pop("tickets")
-        order = Order.objects.create(**validated_data)
-        for ticket_data in tickets_data:
-            Ticket.objects.create(order=order, **ticket_data)
+        ticket_data = validated_data.pop("tickets")
+        order = Order.objects.create(user=self.context['request'].user)
+        Ticket.objects.create(order=order, **ticket_data)
         return order
 
 
