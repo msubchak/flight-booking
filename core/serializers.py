@@ -103,6 +103,14 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = ("id", "create_at", "tickets")
         read_only_fields = ("user",)
 
+
+class OrderCreateSerializer(serializers.ModelSerializer):
+    tickets = TicketCreateSerializer()
+
+    class Meta:
+        model = Order
+        fields = ("id", "tickets")
+
     def create(self, validated_data):
         tickets_data = validated_data.pop("tickets")
         order = Order.objects.create(**validated_data)

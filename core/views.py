@@ -42,7 +42,7 @@ from core.serializers import (
     FlightListSerializer,
     FlightRetrieveSerializer,
     AirplaneImageSerializer,
-    FlightCreateUpdateSerializer,
+    FlightCreateUpdateSerializer, OrderCreateSerializer,
 )
 
 
@@ -262,8 +262,12 @@ class OrderViewSet(
     GenericViewSet
 ):
     queryset = Order.objects.all()
-    serializer_class = OrderSerializer
     permission_classes = (IsAuthenticated,)
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return OrderCreateSerializer
+        return OrderSerializer
 
     def get_queryset(self):
         queryset = self.queryset
